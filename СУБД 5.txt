@@ -1,0 +1,89 @@
+CREATE TABLE Employees (
+Employee_id INT IDENTITY(1,1) PRIMARY KEY,
+F_Name NVARCHAR(20) NOT NULL,
+L_Name NVARCHAR(20) NOT NULL,
+BDate DATE NOT NULL
+);
+
+CREATE TABLE Categories (
+Categ_id INT IDENTITY(1,1) PRIMARY KEY,
+Categ_Name NVARCHAR(20) NOT NULL);
+
+CREATE TABLE Products (
+Product_id INT IDENTITY(1,1) PRIMARY KEY, 
+Product_Name NVARCHAR(20) NOT NULL,
+Categ_id INT NOT NULL,
+Price Money NOT NULL,
+CONSTRAINT fk_Products_Categories FOREIGN KEY (Categ_id) 
+REFERENCES Categories(Categ_id));
+
+INSERT INTO Employees VALUES 
+('Ярослав', 'Гиковский', '2007-05-20'),			     
+('Матвей', 'Сэинт', '2009-04-26'),
+('Богдан', 'Длиннов', '2006-07-01'),
+('Павел', 'Кабанов', '2007-09-17'),
+('Вадим', 'Шефов', '2008-12-16');
+
+INSERT INTO Categories (Categ_Name) VALUES 
+('Телефоны'),
+('Бытовая техника'),
+('Игровые приставки');
+
+INSERT INTO Products (Product_Name, Categ_id, Price) VALUES 
+('Samsung Galaxy S26 Ultra', 1, 4999),
+('Iphone 17 Pro Max', 1, 5499),
+('Iphone 17', 1, 4199),
+('Samsung Galaxy S25 FE', 1, 2999),
+('Фен "Dyson"', 2, 1299),
+('Кофе-машина', 2, 1999),
+('Play Station Portable', 3, 500),
+('Play Station 5', 3, 2999),
+('XBox Series X', 3, 2499);
+
+Go
+CREATE FUNCTION Age_emp (@BDate DATE)
+RETURNS INT
+AS
+BEGIN
+    DECLARE @Age INT;
+    SET @Age = DATEDIFF(YEAR, @BDAte, GETDATE());
+    RETURN @Age
+END;
+GO
+SELECT F_Name, L_Name, dbo.Age_emp(BDate) FROM Employees WHERE dbo.Age_emp(BDate) > 30
+
+
+Go
+CREATE FUNCTION Choose_Categ (@Categ_Name NVARCHAR(20))
+RETURNS TABLE
+AS
+RETURN
+    (SELECT P.Product_id, P.Product_Name, P.Price FROM Products P
+    INNER JOIN Categories C ON P.Categ_id = C.Categ_id
+    WHERE C.Categ_Name = @Categ_Name);
+GO
+SELECT Product_id, Product_Name, Price FROM Choose_Categ('Телефоны');
+
+
+Go
+CREATE FUNCTION Super_Name (@F_Name NVARCHAR(20), @L_Name NVARCHAR(20))
+RETURNS NVARCHAR(40)
+AS
+BEGIN
+	RETURN @F_Name + ' ' + @L_Name
+END;
+GO
+SELECT F_Name, L_Name, dbo.Super_Name(F_Name, L_Name) AS Full_Name FROM Employees;
+
+ 
+Go
+CREATE FUNCTION AvrPrice (@Categ_id INT)
+RETURNS Money
+AS
+BEGIN
+    RETURN (SELECT ISNULL(AVG(Price), 0) 
+            FROM Products 
+            WHERE Categ_id = @Categ_id);
+END;
+GO
+SELECT Categ_Name, dbo.AvrPrice(Categ_id) AS Avr_Price FROM Categories;

@@ -8,7 +8,6 @@ CREATE TABLE STUD (
 	EXM INT
 );
 
-
 CREATE TABLE FACULTY (
 	FACULTYID INT IDENTITY (1,1) NOT NULL PRIMARY KEY,
 	FACULTY_NAME NVARCHAR(35)
@@ -45,11 +44,9 @@ INSERT INTO STUD (LAST_NAME,F_NAME,S_NAME,BR_DATE,IN_DATE, EXM) VALUES
 ('Трофимук','Максим','Владимирович','2007-06-12','2025-09-01',2),
 ('Русин','Яровслав',NULL,'2008-03-14','2025-08-01',10);
 
-
 INSERT INTO FACULTY (FACULTY_NAME) VALUES 
 ('ФПК'), 
 ('ФПИ');
-
 
 INSERT INTO FORM (FORM_NAME) VALUES 
 ('Очная'), 
@@ -67,52 +64,43 @@ INSERT INTO PROCESS (STUDENTID,HOURSID) VALUES
 (3,2),
 (4,4),
 (5,1);
-
---хранимая процедура для подсчета студентов на факультете и форме обучения 
+ 
 GO
 CREATE PROCEDURE STUDCOUNT
-    @FACULTYNAME NVARCHAR(25),
-    @FORMNAME NVARCHAR(7)
+    @FACULTYNAME NVARCHAR(35),
+    @FORMNAME NVARCHAR(9)
 AS
 BEGIN
     SET NOCOUNT ON;
-
     DECLARE @COUNT INT = 0;
-
     SELECT @COUNT = COUNT(DISTINCT STUDENTID) 
     FROM PROCESS 
     JOIN HOURSS ON HOURSID = HOURS_ID
     JOIN FACULTY ON FACULTY_ID = FACULTYID
     JOIN FORM ON FORM_ID = FORMID 
     WHERE FACULTY_NAME = @FACULTYNAME AND FORM_NAME = @FORMNAME;
-
     SELECT @COUNT AS STUDENT_COUNT;
 END
 GO
 EXECUTE STUDCOUNT 'ФПИ','Заочная';
 
---хранимая процедура для подсчета числа предметов на факультетах, а также числа одинаковых предметов
 GO
 CREATE PROCEDURE SUBCOUNT
 AS
 BEGIN
     SET NOCOUNT ON;
-
     DECLARE @FPK INT = 0;
     DECLARE @FPI INT = 0;
     DECLARE @ALL INT = 0;
     DECLARE @SAME INT = 0;
-
     SELECT @FPK = COUNT(*) FROM HOURSS WHERE FACULTY_ID = 1;
     SELECT @FPI = COUNT(*) FROM HOURSS WHERE FACULTY_ID = 2;
     SELECT @ALL = COUNT(*) FROM HOURSS;
-    
     SELECT @SAME = COUNT(*) 
     FROM HOURSS h1
     JOIN HOURSS h2 ON h1.COURSE = h2.COURSE AND h1.FORM_ID = h2.FORM_ID
     WHERE h1.FACULTY_ID < h2.FACULTY_ID;
 
-    -- Использование CONCAT предотвращает появление лишних пробелов, в отличие от STR()
     PRINT CONCAT('Для ФПК читается предметов: ', @FPK);
     PRINT CONCAT('Для ФПИ читается предметов: ', @FPI);
     PRINT CONCAT('Всего предметов в базе: ', @ALL);
@@ -120,7 +108,6 @@ BEGIN
 END
 GO
 
---добавление студента на указанный факультет и форму обучения
 GO
 CREATE PROCEDURE NEWSTUDENT
     @FACULTYNAME NVARCHAR(35),
@@ -133,10 +120,8 @@ CREATE PROCEDURE NEWSTUDENT
 AS
 BEGIN
     SET NOCOUNT ON;
-
     DECLARE @FACULTYID INT, @FORMID INT, @HOURSID INT, @NEWID INT;
 
-    -- Проверка существования факультета
     SELECT @FACULTYID = FACULTYID FROM FACULTY WHERE FACULTY_NAME = @FACULTYNAME;
     IF @FACULTYID IS NULL
     BEGIN
@@ -144,7 +129,6 @@ BEGIN
         RETURN;
     END
 
-    -- Проверка существования формы обучения
     SELECT @FORMID = FORMID FROM FORM WHERE FORM_NAME = @FORMNAME;
     IF @FORMID IS NULL
     BEGIN
@@ -152,7 +136,6 @@ BEGIN
         RETURN;
     END
 
-    -- Проверка существования учебного плана (курса) для 1-го курса
     SELECT @HOURSID = HOURS_ID FROM HOURSS 
     WHERE FACULTY_ID = @FACULTYID AND FORM_ID = @FORMID AND COURSE = 1;
     IF @HOURSID IS NULL
@@ -161,17 +144,13 @@ BEGIN
         RETURN;
     END
 
-    -- Вставка нового студента
     INSERT INTO STUD (LAST_NAME, F_NAME, S_NAME, BR_DATE, IN_DATE, EXM)
     VALUES (@LASTNAME, @FNAME, @SNAME, @BRDATE, @INDATE, 0);
 
-    -- Безопасное получение ID только что добавленного студента в рамках текущей сессии
     SET @NEWID = SCOPE_IDENTITY();
 
-    -- Привязка студента к процессу обучения
     INSERT INTO PROCESS (STUDENTID, HOURSID)
     VALUES (@NEWID, @HOURSID);
-
     PRINT 'Студент успешно добавлен.';
 END
 GO

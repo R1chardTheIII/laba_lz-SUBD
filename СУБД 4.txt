@@ -1,0 +1,180 @@
+CREATE TABLE STUD (
+	STUDENT_ID INT IDENTITY (1,1) NOT NULL PRIMARY KEY ,
+	LAST_NAME NVARCHAR (30),
+	F_NAME NVARCHAR (30),
+	S_NAME NVARCHAR (30),
+	BR_DATE DATE,
+	IN_DATE DATE,
+	EXM INT
+);
+
+
+CREATE TABLE FACULTY (
+	FACULTYID INT IDENTITY (1,1) NOT NULL PRIMARY KEY,
+	FACULTY_NAME NVARCHAR(35)
+);
+
+CREATE TABLE FORM (
+	FORMID INT IDENTITY (1,1) NOT NULL PRIMARY KEY,
+	FORM_NAME NVARCHAR (9)
+);
+
+CREATE TABLE HOURSS (
+	HOURS_ID INT IDENTITY (1,1) NOT NULL PRIMARY KEY ,
+	COURSE INT,
+	FACULTY_ID INT,
+	FORM_ID INT,
+	ALL_H INT,
+	INCLASS_H INT,
+	FOREIGN KEY (FACULTY_ID) REFERENCES FACULTY(FACULTYID),
+	FOREIGN KEY (FORM_ID) REFERENCES FORM(FORMID)
+);
+
+CREATE TABLE PROCESS (
+	STUDENTID INT,
+	HOURSID INT,
+	PRIMARY KEY (STUDENTID,HOURSID),
+	FOREIGN KEY (HOURSID) REFERENCES HOURSS(HOURS_ID),
+	FOREIGN KEY (STUDENTID) REFERENCES STUD (STUDENT_ID)
+	);
+
+INSERT INTO STUD (LAST_NAME,F_NAME,S_NAME,BR_DATE,IN_DATE, EXM) VALUES
+('Мелещук','Виктория','Александровна,'2007-10-04','2024-09-01',10),
+('Бойко','Ирина','Вячеславовна','2006-05-30','2022-09-01',5),
+('Ничингер','Богдан','Олегович','2007-08-31','2023-09-01',9),
+('Трофимук','Максим','Владимирович','2007-06-12','2025-09-01',2),
+('Русин','Яровслав',NULL,'2008-03-14','2025-08-01',10);
+
+
+INSERT INTO FACULTY (FACULTY_NAME) VALUES 
+('ФПК'), 
+('ФПИ');
+
+
+INSERT INTO FORM (FORM_NAME) VALUES 
+('Очная'), 
+('Заочная');
+
+INSERT INTO HOURSS (COURSE,FACULTY_ID,FORM_ID,ALL_H,INCLASS_H) VALUES
+(1,1,1,246,47),
+(2,2,2,129,61),
+(3,1,2,102,53),
+(3,2,1,106,58);
+
+INSERT INTO PROCESS (STUDENTID,HOURSID) VALUES
+(1,2),
+(2,3),
+(3,2),
+(4,4),
+(5,1);
+
+--хранимая процедура для подсчета студентов на факультете и форме обучения 
+GO
+CREATE PROCEDURE STUDCOUNT
+    @FACULTYNAME NVARCHAR(25),
+    @FORMNAME NVARCHAR(7)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @COUNT INT = 0;
+
+    SELECT @COUNT = COUNT(DISTINCT STUDENTID) 
+    FROM PROCESS 
+    JOIN HOURSS ON HOURSID = HOURS_ID
+    JOIN FACULTY ON FACULTY_ID = FACULTYID
+    JOIN FORM ON FORM_ID = FORMID 
+    WHERE FACULTY_NAME = @FACULTYNAME AND FORM_NAME = @FORMNAME;
+
+    SELECT @COUNT AS STUDENT_COUNT;
+END
+GO
+EXECUTE STUDCOUNT 'ФПИ','Заочная';
+
+--хранимая процедура для подсчета числа предметов на факультетах, а также числа одинаковых предметов
+GO
+CREATE PROCEDURE SUBCOUNT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @FPK INT = 0;
+    DECLARE @FPI INT = 0;
+    DECLARE @ALL INT = 0;
+    DECLARE @SAME INT = 0;
+
+    SELECT @FPK = COUNT(*) FROM HOURSS WHERE FACULTY_ID = 1;
+    SELECT @FPI = COUNT(*) FROM HOURSS WHERE FACULTY_ID = 2;
+    SELECT @ALL = COUNT(*) FROM HOURSS;
+    
+    SELECT @SAME = COUNT(*) 
+    FROM HOURSS h1
+    JOIN HOURSS h2 ON h1.COURSE = h2.COURSE AND h1.FORM_ID = h2.FORM_ID
+    WHERE h1.FACULTY_ID < h2.FACULTY_ID;
+
+    -- Использование CONCAT предотвращает появление лишних пробелов, в отличие от STR()
+    PRINT CONCAT('Для ФПК читается предметов: ', @FPK);
+    PRINT CONCAT('Для ФПИ читается предметов: ', @FPI);
+    PRINT CONCAT('Всего предметов в базе: ', @ALL);
+    PRINT CONCAT('Из них идентичных: ', @SAME);
+END
+GO
+
+--добавление студента на указанный факультет и форму обучения
+GO
+CREATE PROCEDURE NEWSTUDENT
+    @FACULTYNAME NVARCHAR(35),
+    @FORMNAME NVARCHAR(9),
+    @BRDATE DATE,
+    @INDATE DATE,
+    @LASTNAME NVARCHAR(30),
+    @FNAME NVARCHAR(30),
+    @SNAME NVARCHAR(30) 
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @FACULTYID INT, @FORMID INT, @HOURSID INT, @NEWID INT;
+
+    -- Проверка существования факультета
+    SELECT @FACULTYID = FACULTYID FROM FACULTY WHERE FACULTY_NAME = @FACULTYNAME;
+    IF @FACULTYID IS NULL
+    BEGIN
+        PRINT 'Ошибка: Факультет не найден.';
+        RETURN;
+    END
+
+    -- Проверка существования формы обучения
+    SELECT @FORMID = FORMID FROM FORM WHERE FORM_NAME = @FORMNAME;
+    IF @FORMID IS NULL
+    BEGIN
+        PRINT 'Ошибка: Форма обучения не найдена.';
+        RETURN;
+    END
+
+    -- Проверка существования учебного плана (курса) для 1-го курса
+    SELECT @HOURSID = HOURS_ID FROM HOURSS 
+    WHERE FACULTY_ID = @FACULTYID AND FORM_ID = @FORMID AND COURSE = 1;
+    IF @HOURSID IS NULL
+    BEGIN
+        PRINT 'Ошибка: Учебный план для 1-го курса не найден.';
+        RETURN;
+    END
+
+    -- Вставка нового студента
+    INSERT INTO STUD (LAST_NAME, F_NAME, S_NAME, BR_DATE, IN_DATE, EXM)
+    VALUES (@LASTNAME, @FNAME, @SNAME, @BRDATE, @INDATE, 0);
+
+    -- Безопасное получение ID только что добавленного студента в рамках текущей сессии
+    SET @NEWID = SCOPE_IDENTITY();
+
+    -- Привязка студента к процессу обучения
+    INSERT INTO PROCESS (STUDENTID, HOURSID)
+    VALUES (@NEWID, @HOURSID);
+
+    PRINT 'Студент успешно добавлен.';
+END
+GO
+
+EXECUTE NEWSTUDENT @FACULTYNAME='ФПК', @FORMNAME='Очная',@BRDATE='2006-12-26', @INDATE='2026-09-01',
+@LASTNAME='Мазур', @FNAME='Даниил', @SNAME='Богданович';
